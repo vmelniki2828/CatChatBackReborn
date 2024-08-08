@@ -2,18 +2,30 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
-
+const { v4: uuidv4 } = require('uuid');
+const Client = require('./models/Client');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: "http://localhost:3001", // Укажите адрес вашего клиента
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: true,
+     reconnection: true, // Включает автоматическое восстановление соединения
+  reconnectionAttempts: 5, // Максимальное количество попыток восстановления
+  reconnectionDelay: 1000, 
   }
 });
 
 app.use(cors({
-  origin: "http://localhost:3001" // Укажите адрес вашего клиента
+  origin: "http://localhost:3001",
+  methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: true,
+     reconnection: true, // Включает автоматическое восстановление соединения
+  reconnectionAttempts: 5, // Максимальное количество попыток восстановления
+  reconnectionDelay: 1000,  // Укажите адрес вашего клиента
 }));
 
 app.use(express.static('public'));
@@ -23,34 +35,47 @@ let managers = []; // Список доступных менеджеров
 let users = {}; // Соответствие пользователя и менеджера
 
 io.on('connection', (socket) => {
-  // Когда подключается менеджер
-  socket.on('manager', () => {
-    managers.push(socket.id);
-    console.log(`Менеджер ${socket.id} подключен`);
-  });
+  socket.on('user', async ({ username, email }) => {
+    try {
+      // Проверка на существующего пользователя
+      const existingClient = await Client.findOne({ email });
+      if (existingClient) {
+        socket.emit('userExists', 'Пользователь с таким email уже существует');
+        return;
+      }
 
-  // Когда подключается пользователь
-  socket.on('user', () => {
-    if (managers.length > 0) {
-      const managerId = managers.shift(); // Получаем первого доступного менеджера
-      users[socket.id] = managerId; // Связываем пользователя с менеджером
-      // Создаем комнату для пользователя и менеджера
-      const roomId = `room-${socket.id}`;
-      socket.join(roomId);
-      io.to(managerId).socketsJoin(roomId);
-      socket.emit('userAssigned', roomId);
-      console.log(`Пользователь ${socket.id} подключен к менеджеру ${managerId}`);
+      // Создаем нового клиента
+      const clientId = uuidv4();
+      const client = new Client({
+        username,
+        clientId,
+        email,
+        // Другие поля
+      });
+      await client.save();
 
-      // Отправляем уведомление менеджеру
-      io.to(managerId).emit('userAssigned', socket.id);
-    } else {
-      socket.emit('noManagersAvailable');
-      console.log(`Нет доступных менеджеров для пользователя ${socket.id}`);
+      if (managers.length > 0) {
+        const manager = managers.shift();
+        users[clientId] = { managerId: manager.id, roomId: `room-${clientId}` };
+        socket.join(users[clientId].roomId);
+        io.to(manager.socketId).socketsJoin(users[clientId].roomId);
+        socket.emit('userAssigned', users[clientId].roomId);
+        console.log(`Пользователь ${clientId} подключен к менеджеру ${manager.id}`);
+
+        io.to(manager.socketId).emit('userAssigned', clientId);
+      } else {
+        socket.emit('noManagersAvailable');
+        console.log(`Нет доступных менеджеров для пользователя ${clientId}`);
+      }
+    } catch (error) {
+      console.error('Ошибка при подключении пользователя:', error);
+      socket.emit('error', 'Ошибка при подключении пользователя');
     }
   });
 
+
   socket.on('message', ({ roomId, message }) => {
-    io.to(roomId).emit('message', message);
+    io.to(roomId).emit('message', message); 
   });
 
   // Когда пользователь или менеджер отключаются

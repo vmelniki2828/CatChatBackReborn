@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 
 const clientSchema = new mongoose.Schema({
     username: String,
+  clientId:String,
     email: { type: String, required: false }, 
     location: { type: String, required: false },
     // ip
