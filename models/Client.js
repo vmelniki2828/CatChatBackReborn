@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 
 const clientSchema = new mongoose.Schema({
-    username: String,
-  clientId:String,
-    email: { type: String, required: false }, 
-    location: { type: String, required: false },
+    username: {type : String},
+    clientId:{type : String},
+    email: { type: String}, 
+    location: { type: String },
     // ip
     // device
     // phone
