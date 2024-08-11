@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const Client = require("./Client");
 
 const messageSchema = new mongoose.Schema({
   sender: String,
@@ -7,11 +6,27 @@ const messageSchema = new mongoose.Schema({
   timestamp: String,
 });
 
+const clientSchema = new mongoose.Schema({
+  username: String,
+  clientId : String,
+  email: String, 
+  location: String ,
+  // ip
+  // device
+  // phone
+  // browser
+  // userId Fundist
+  // Tag
+  // project
+  // site
+  // tickets
+});
+
 const roomSchema = new mongoose.Schema({
   // roomID
   roomId: String,
-  clients: [{ type: mongoose.Schema.Types.ObjectId, ref: "Client" }], // Использовать отдельную схему для клиентов
-  managers: [String], // Менеджеры чата
+  clients: clientSchema, // Использовать отдельную схему для клиентов
+  managers: [], // Менеджеры чата
   messages: [messageSchema],
   startTime: { type: Date, default: Date.now }, // Время начала чата
   endTime: Date, // Время окончания чата.

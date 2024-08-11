@@ -3,34 +3,28 @@ const http = require("http");
 const socketIo = require("socket.io");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
-const Client = require("./models/Client");
 const Manager = require("./models/Manager");
 const Room = require("./models/Room");
 const app = express();
 const server = http.createServer(app);
 const managersRoutes = require("./routes/managersRoutes");
+const roomRoutes = require("./routes/roomsRoutes");
 const { default: mongoose } = require("mongoose");
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3001", // Укажите адрес вашего клиента
+    origin: "http://localhost:3000", // Укажите правильный адрес вашего клиента (фронтенда)
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
-    reconnection: true, // Включает автоматическое восстановление соединения
-    reconnectionAttempts: 5, // Максимальное количество попыток восстановления
-    reconnectionDelay: 1000,
   },
 });
 
 app.use(
   cors({
-    origin: "http://localhost:3001",
+    origin: "http://localhost:3000", // Укажите правильный адрес вашего клиента (фронтенда)
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
-    reconnection: true, // Включает автоматическое восстановление соединения
-    reconnectionAttempts: 5, // Максимальное количество попыток восстановления
-    reconnectionDelay: 1000, // Укажите адрес вашего клиента
   })
 );
 
@@ -48,9 +42,24 @@ mongoose
 
 app.use(express.static("public"));
 app.use("/api", managersRoutes);
+app.use("/api", roomRoutes);
 
-let managers = []; // Список доступных менеджеров
-let users = {}; // Соответствие пользователя и менеджера
+// let managers = []; // Список доступных менеджеров
+// let users = {}; // Соответствие пользователя и менеджера
+
+const getRandomManager = async () => {
+  try {
+    const managers = await Manager.find(); // Получаем всех менеджеров
+    if (managers.length === 0) {
+      throw new Error("Нет доступных менеджеров");
+    }
+    const randomIndex = Math.floor(Math.random() * managers.length); // Выбираем случайный индекс
+    return managers[randomIndex];
+  } catch (err) {
+    console.error("Ошибка при получении случайного менеджера", err);
+    throw err;
+  }
+};
 
 io.on("connection", (socket) => {
   socket.on("join_manager", async (username) => {
@@ -71,50 +80,42 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join_user", async (username, email) => {
-    console.log(username, email)
+    console.log(username, email);
     try {
-      let client = await Client.findOne({ email });
-      if (client) {
-        socket.emit("userExists", "Пользователь с таким email уже существует");
-        return;
-      } else {
-        const clientId = socket.id;
-        console.log(username, clientId, email)
-        client = new Client({
-          username,
-          clientId,
-          email,
+      const clientForRoom = {
+        username: username,
+        clientId: socket.id,
+        email: email,
+        location: "", // Здесь можно установить значение location, если оно доступно
+      };
+
+      // Создаем новую комнату и добавляем клиента
+      const newRoom = new Room({
+        roomId: `room_${clientForRoom.clientId}`, // Генерация уникального ID для комнаты
+        clients: clientForRoom, // Добавление клиента в комнату
+        managers: [], // Менеджеры будут добавлены позже
+        messages: [], // Изначально пустой массив сообщений
+      });
+
+      await newRoom.save();
+      console.log(`Комната с ID ${newRoom.roomId} успешно создана`);
+
+      const randomManager = await getRandomManager();
+      if (randomManager) {
+        // Добавляем менеджера в комнату
+        newRoom.managers.push({
+          username: randomManager.username,
+          socketId: randomManager.socketId,
         });
-        await client.save();
+        await newRoom.save();
+        console.log(
+          `Менеджер ${randomManager.username} добавлен в комнату ${newRoom.roomId}`
+        );
       }
-      console.log(`Клиент ${username} успешно сохранен`);
+      io.emit("newChat", newRoom);
     } catch (err) {
       console.error("Ошибка при сохранении клиента в базе данных", err);
     }
-
-    //   // Создаем нового клиента
-    //   const clientId = uuidv4();
-    //
-
-    //   if (managers.length > 0) {
-    //     const manager = managers.shift();
-    //     users[clientId] = { managerId: manager.id, roomId: `room-${clientId}` };
-    //     socket.join(users[clientId].roomId);
-    //     io.to(manager.socketId).socketsJoin(users[clientId].roomId);
-    //     socket.emit("userAssigned", users[clientId].roomId);
-    //     console.log(
-    //       `Пользователь ${clientId} подключен к менеджеру ${manager.id}`
-    //     );
-
-    //     io.to(manager.socketId).emit("userAssigned", clientId);
-    //   } else {
-    //     socket.emit("noManagersAvailable");
-    //     console.log(`Нет доступных менеджеров для пользователя ${clientId}`);
-    //   }
-    // } catch (error) {
-    //   console.error("Ошибка при подключении пользователя:", error);
-    //   socket.emit("error", "Ошибка при подключении пользователя");
-    // }
   });
 
   socket.on("message", ({ roomId, message }) => {
@@ -122,17 +123,17 @@ io.on("connection", (socket) => {
   });
 
   // Когда пользователь или менеджер отключаются
-  socket.on("disconnect", () => {
-    if (managers.includes(socket.id)) {
-      managers = managers.filter((id) => id !== socket.id);
-      console.log(`Менеджер ${socket.id} отключен`);
-    } else if (users[socket.id]) {
-      const managerId = users[socket.id];
-      managers.push(managerId); // Освобождаем менеджера
-      delete users[socket.id];
-      console.log(`Пользователь ${socket.id} отключен`);
-    }
-  });
+  // socket.on("disconnect", () => {
+  //   if (managers.includes(socket.id)) {
+  //     managers = managers.filter((id) => id !== socket.id);
+  //     console.log(`Менеджер ${socket.id} отключен`);
+  //   } else if (users[socket.id]) {
+  //     const managerId = users[socket.id];
+  //     managers.push(managerId); // Освобождаем менеджера
+  //     delete users[socket.id];
+  //     console.log(`Пользователь ${socket.id} отключен`);
+  //   }
+  // });
 });
 
 const PORT = process.env.PORT || 3001;
