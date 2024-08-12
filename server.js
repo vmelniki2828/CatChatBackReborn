@@ -99,6 +99,7 @@ io.on("connection", (socket) => {
 
       await newRoom.save();
       console.log(`Комната с ID ${newRoom.roomId} успешно создана`);
+      socket.emit("roomCreated", newRoom.roomId);
 
       const randomManager = await getRandomManager();
       if (randomManager) {
@@ -118,8 +119,36 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("message", ({ roomId, message }) => {
-    io.to(roomId).emit("message", message);
+  socket.on("send_message", async (message) => {
+    const { roomId, sender, messageText } = message;
+    try {
+      const room = await Room.findOne({ roomId });
+  
+      if (!room) {
+        console.error("Комната не найдена");
+        return;
+      }
+  
+      // Создание нового сообщения
+      const newMessage = {
+        sender,
+        message: messageText,
+        timestamp: new Date(),
+      };
+  
+      // Добавление сообщения в массив
+      room.messages.push(newMessage);
+  
+      // Сохранение изменений в базе данных
+      await room.save();
+      console.log(newMessage)
+      // Отправка сообщения всем клиентам в комнате
+      console.log(roomId)
+      io.emit("receive_message", newMessage);
+  
+    } catch (err) {
+      console.error("Ошибка при отправке сообщения", err);
+    }
   });
 
   // Когда пользователь или менеджер отключаются
