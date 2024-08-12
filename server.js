@@ -62,6 +62,8 @@ const getRandomManager = async () => {
 };
 
 io.on("connection", (socket) => {
+  console.log("Новый клиент подключен:", socket.id);
+
   socket.on("join_manager", async (username) => {
     console.log(`Менеджер ${username} присоединился`);
     try {
@@ -86,15 +88,14 @@ io.on("connection", (socket) => {
         username: username,
         clientId: socket.id,
         email: email,
-        location: "", // Здесь можно установить значение location, если оно доступно
+        location: "",
       };
 
-      // Создаем новую комнату и добавляем клиента
       const newRoom = new Room({
-        roomId: `room_${clientForRoom.clientId}`, // Генерация уникального ID для комнаты
-        clients: clientForRoom, // Добавление клиента в комнату
-        managers: [], // Менеджеры будут добавлены позже
-        messages: [], // Изначально пустой массив сообщений
+        roomId: `room_${clientForRoom.clientId}`,
+        clients: clientForRoom,
+        managers: [],
+        messages: [],
       });
 
       await newRoom.save();
@@ -103,7 +104,6 @@ io.on("connection", (socket) => {
 
       const randomManager = await getRandomManager();
       if (randomManager) {
-        // Добавляем менеджера в комнату
         newRoom.managers.push({
           username: randomManager.username,
           socketId: randomManager.socketId,
@@ -114,6 +114,11 @@ io.on("connection", (socket) => {
         );
       }
       io.emit("newChat", newRoom);
+
+      console.log(
+        `Клиент ${socket.id} присоединился к комнате ${newRoom.roomId}`
+      );
+      socket.join(newRoom.roomId); // Убедитесь, что клиент присоединяется к комнате
     } catch (err) {
       console.error("Ошибка при сохранении клиента в базе данных", err);
     }
@@ -123,46 +128,47 @@ io.on("connection", (socket) => {
     const { roomId, sender, messageText } = message;
     try {
       const room = await Room.findOne({ roomId });
-  
+
       if (!room) {
         console.error("Комната не найдена");
         return;
       }
-  
-      // Создание нового сообщения
+
       const newMessage = {
         sender,
         message: messageText,
         timestamp: new Date(),
       };
-  
-      // Добавление сообщения в массив
+
       room.messages.push(newMessage);
-  
-      // Сохранение изменений в базе данных
+      console.log("Добавляем сообщение в комнату:", newMessage);
       await room.save();
-      console.log(newMessage)
-      // Отправка сообщения всем клиентам в комнате
-      console.log(socket.id)
-      io.to(socket.id).emit("receive_message", newMessage);
-  
+
+      console.log("Новое сообщение сохранено:", newMessage);
+
+      console.log(`Отправляем сообщение в комнату ${roomId}`);
+      io.to(roomId).emit("receive_message", newMessage);
+      console.log(`Сообщение отправлено в комнату ${roomId}`);
     } catch (err) {
       console.error("Ошибка при отправке сообщения", err);
     }
   });
 
-  // Когда пользователь или менеджер отключаются
-  // socket.on("disconnect", () => {
-  //   if (managers.includes(socket.id)) {
-  //     managers = managers.filter((id) => id !== socket.id);
-  //     console.log(`Менеджер ${socket.id} отключен`);
-  //   } else if (users[socket.id]) {
-  //     const managerId = users[socket.id];
-  //     managers.push(managerId); // Освобождаем менеджера
-  //     delete users[socket.id];
-  //     console.log(`Пользователь ${socket.id} отключен`);
-  //   }
-  // });
+  socket.on("disconnect", () => {
+    console.log(`Клиент ${socket.id} отключен`);
+    // Когда пользователь или менеджер отключаются
+    // socket.on("disconnect", () => {
+    //   if (managers.includes(socket.id)) {
+    //     managers = managers.filter((id) => id !== socket.id);
+    //     console.log(`Менеджер ${socket.id} отключен`);
+    //   } else if (users[socket.id]) {
+    //     const managerId = users[socket.id];
+    //     managers.push(managerId); // Освобождаем менеджера
+    //     delete users[socket.id];
+    //     console.log(`Пользователь ${socket.id} отключен`);
+    //   }
+    // });
+  });
 });
 
 const PORT = process.env.PORT || 3001;
