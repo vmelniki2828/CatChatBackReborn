@@ -143,8 +143,8 @@ io.on("connection", (socket) => {
       await room.save();
       console.log(newMessage)
       // Отправка сообщения всем клиентам в комнате
-      console.log(roomId)
-      io.emit("receive_message", newMessage);
+      console.log(socket.id)
+      io.to(socket.id).emit("receive_message", newMessage);
   
     } catch (err) {
       console.error("Ошибка при отправке сообщения", err);
