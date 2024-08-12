@@ -149,6 +149,8 @@ io.on("connection", (socket) => {
       console.log(`Отправляем сообщение в комнату ${roomId}`);
       io.to(roomId).emit("receive_message", newMessage);
       console.log(`Сообщение отправлено в комнату ${roomId}`);
+      io.emit("update_chats");
+      console.log("Чаты обновлены для всех клиентов");
     } catch (err) {
       console.error("Ошибка при отправке сообщения", err);
     }
