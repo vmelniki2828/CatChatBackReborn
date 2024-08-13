@@ -171,6 +171,18 @@ io.on("connection", (socket) => {
     //   }
     // });
   });
+
+  socket.on('get_rooms', async () => {
+    try {
+      const rooms = await Room.find(); // Получаем все комнаты из базы данных
+      socket.emit('rooms_update', rooms); // Отправляем результат только клиенту, который запросил комнаты
+    } catch (err) {
+      console.error('Ошибка при получении чатов', err);
+    }
+  });
+  
+
+
 });
 
 const PORT = process.env.PORT || 3001;
