@@ -51,13 +51,13 @@ const getRandomManager = async () => {
   try {
     const managers = await Manager.find(); // Получаем всех менеджеров
     if (managers.length === 0) {
-      throw new Error("Нет доступных менеджеров");
+      return null; // Если менеджеров нет, возвращаем null
     }
     const randomIndex = Math.floor(Math.random() * managers.length); // Выбираем случайный индекс
     return managers[randomIndex];
   } catch (err) {
     console.error("Ошибка при получении случайного менеджера", err);
-    throw err;
+    throw err; // Выбрасываем ошибку только если произошла ошибка с базой данных
   }
 };
 
@@ -81,71 +81,92 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("delete_manager", async (username) => {
+    console.log(`Менеджер ${username} вышел`);
+    try {
+      const manager = await Manager.findOneAndDelete({ username });
+      if (manager) {
+        console.log(`Менеджер ${username} удален из базы данных`);
+      } else {
+        console.log(`Менеджер ${username} не найден в базе данных`);
+      }
+    } catch (err) {
+      console.error("Ошибка при удалении менеджера из базы данных", err);
+    }
+  });
+
   socket.on("join_user", async (username, email) => {
     console.log(username, email);
     try {
+      const randomManager = await getRandomManager();
+      if (!randomManager) {
+        // Если менеджеров нет, отправляем клиенту сообщение и выходим
+        socket.emit("noManagersAvailable", "Нет доступных менеджеров. Комната не может быть создана.");
+        return;
+      }
+  
       const clientForRoom = {
         username: username,
         clientId: socket.id,
         email: email,
         location: "",
       };
-
+  
       const newRoom = new Room({
         roomId: `room_${clientForRoom.clientId}`,
         clients: clientForRoom,
         managers: [],
         messages: [],
       });
-
+  
       await newRoom.save();
       console.log(`Комната с ID ${newRoom.roomId} успешно создана`);
       socket.emit("roomCreated", newRoom.roomId);
-
-      const randomManager = await getRandomManager();
-      if (randomManager) {
-        newRoom.managers.push({
-          username: randomManager.username,
-          socketId: randomManager.socketId,
-        });
-        await newRoom.save();
-        console.log(
-          `Менеджер ${randomManager.username} добавлен в комнату ${newRoom.roomId}`
-        );
-      }
+  
+      newRoom.managers.push({
+        username: randomManager.username,
+        socketId: randomManager.socketId,
+      });
+      await newRoom.save();
+      console.log(
+        `Менеджер ${randomManager.username} добавлен в комнату ${newRoom.roomId}`
+      );
+  
       io.emit("newChat", newRoom);
-
+  
       console.log(
         `Клиент ${socket.id} присоединился к комнате ${newRoom.roomId}`
       );
-      socket.join(newRoom.roomId); // Убедитесь, что клиент присоединяется к комнате
+      socket.join(newRoom.roomId); // Клиент присоединяется к комнате
     } catch (err) {
-      console.error("Ошибка при сохранении клиента в базе данных", err);
+      console.error("Ошибка при создании комнаты или присоединении клиента", err);
+      socket.emit("errorCreatingRoom", "Произошла ошибка при создании комнаты.");
     }
   });
-
+  
   socket.on("send_message", async (message) => {
     const { roomId, sender, messageText } = message;
     try {
       const room = await Room.findOne({ roomId });
-
+  
       if (!room) {
         console.error("Комната не найдена");
+        socket.emit("error_message", { message: "Комната не найдена." });
         return;
       }
-
+  
       const newMessage = {
         sender,
         message: messageText,
         timestamp: new Date(),
       };
-
+  
       room.messages.push(newMessage);
       console.log("Добавляем сообщение в комнату:", newMessage);
       await room.save();
-
+  
       console.log("Новое сообщение сохранено:", newMessage);
-
+  
       console.log(`Отправляем сообщение в комнату ${roomId}`);
       io.to(roomId).emit("receive_message", newMessage);
       console.log(`Сообщение отправлено в комнату ${roomId}`);
@@ -153,6 +174,10 @@ io.on("connection", (socket) => {
       console.log("Чаты обновлены для всех клиентов");
     } catch (err) {
       console.error("Ошибка при отправке сообщения", err);
+      // Отправляем сообщение клиенту об ошибке
+      socket.emit("error_message", {
+        message: "Ошибка при отправке сообщения. Попробуйте еще раз.",
+      });
     }
   });
 
