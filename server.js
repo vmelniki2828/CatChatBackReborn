@@ -10,6 +10,7 @@ const server = http.createServer(app);
 const managersRoutes = require("./routes/managersRoutes");
 const roomRoutes = require("./routes/roomsRoutes");
 const { default: mongoose } = require("mongoose");
+const ArchivedRoom = require("./models/archivedRoom");
 const io = socketIo(server, {
   cors: {
     origin: "http://localhost:3000", // Укажите правильный адрес вашего клиента (фронтенда)
@@ -181,8 +182,38 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
-    console.log(`Клиент ${socket.id} отключен`);
+  socket.on("disconnect_chat", async (roomId) => {
+    try {
+      const room = await Room.findOne({ roomId });
+      if (room) {
+        // Создаем архивную комнату на основе текущей
+        const archivedRoom = new ArchivedRoom({
+          roomId: room.roomId,
+          clients: room.clients,
+          managers: room.managers,
+          messages: room.messages,
+          startTime: room.startTime,
+          endTime: new Date(), // Время окончания чата
+        });
+
+        await archivedRoom.save(); // Сохраняем архивную комнату
+
+        // Удаляем активную комнату из коллекции Room
+        await Room.deleteOne({ roomId: roomId });
+        console.log(`Комната с ID ${roomId} была архивирована и удалена из активных комнат`);
+
+        io.to(roomId).emit("chat_disconnected", "Чат был отключен и архивирован.");
+        io.in(roomId).socketsLeave(roomId);
+      } else {
+        console.log(`Комната с ID ${roomId} не найдена`);
+      }
+    } catch (err) {
+      console.error("Ошибка при архивации комнаты", err);
+    }
+  });
+
+  // socket.on("disconnect", () => {
+  //   console.log(`Клиент ${socket.id} отключен`);
     // Когда пользователь или менеджер отключаются
     // socket.on("disconnect", () => {
     //   if (managers.includes(socket.id)) {
@@ -195,19 +226,17 @@ io.on("connection", (socket) => {
     //     console.log(`Пользователь ${socket.id} отключен`);
     //   }
     // });
-  });
+  // });
 
-  socket.on('get_rooms', async () => {
+  socket.on("get_archived_rooms", async () => {
     try {
-      const rooms = await Room.find(); // Получаем все комнаты из базы данных
-      socket.emit('rooms_update', rooms); // Отправляем результат только клиенту, который запросил комнаты
+      const archivedRooms = await ArchivedRoom.find(); // Получаем все архивированные комнаты
+      socket.emit("archived_rooms_update", archivedRooms); // Отправляем результат клиенту
     } catch (err) {
-      console.error('Ошибка при получении чатов', err);
+      console.error("Ошибка при получении архивированных чатов", err);
     }
   });
   
-
-
 });
 
 const PORT = process.env.PORT || 3001;
