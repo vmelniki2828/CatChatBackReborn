@@ -229,16 +229,18 @@ io.on("connection", (socket) => {
     // });
   // });
 
-  socket.on("get_archived_rooms", async () => {
-    try {
-      const archivedRooms = await ArchivedRoom.find(); // Получаем все архивированные комнаты
-      socket.emit("archived_rooms_update", archivedRooms); // Отправляем результат клиенту
-    } catch (err) {
-      console.error("Ошибка при получении архивированных чатов", err);
-    }
-  });
-  
-});
+socket.on("get_archived_rooms", async ({ username }) => {
+  try {
+    // Находим все архивные комнаты, где менеджер с указанным именем участвовал
+    const archivedRooms = await ArchivedRoom.find({
+      "managers.username": username,
+    });
+
+    socket.emit("archived_rooms_update", archivedRooms); // Отправляем результат клиенту
+  } catch (err) {
+    console.error("Ошибка при получении архивированных чатов", err);
+  }
+});});
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
