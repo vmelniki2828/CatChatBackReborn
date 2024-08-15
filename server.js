@@ -23,7 +23,7 @@ const io = socketIo(server, {
 app.use(
   cors({
     origin: "http://localhost:3000", // Укажите правильный адрес вашего клиента (фронтенда)
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PUT"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
   })
@@ -42,6 +42,7 @@ mongoose
   });
 
 app.use(express.static("public"));
+app.use(express.json());
 app.use("/api", managersRoutes);
 app.use("/api", roomRoutes);
 
