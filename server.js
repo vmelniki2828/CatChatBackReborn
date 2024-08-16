@@ -97,21 +97,21 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("join_user", async (username, email) => {
-    console.log(username, email);
+  socket.on('join_user', async ({ username, email, otherInfo }) => {
+    console.log(`User ${username} with email ${email} and data:`, otherInfo);
+    
     try {
       const randomManager = await getRandomManager();
       if (!randomManager) {
-        // Если менеджеров нет, отправляем клиенту сообщение и выходим
         socket.emit("noManagersAvailable", "Нет доступных менеджеров. Комната не может быть создана.");
         return;
       }
   
       const clientForRoom = {
-        username: username,
+        username,
         clientId: socket.id,
-        email: email,
-        location: "",
+        email,
+        otherInfo
       };
   
       const newRoom = new Room({
@@ -123,23 +123,17 @@ io.on("connection", (socket) => {
   
       await newRoom.save();
       console.log(`Комната с ID ${newRoom.roomId} успешно создана`);
-      socket.emit("roomCreated", newRoom.roomId);
+      socket.emit('roomCreated', newRoom.roomId);
   
       newRoom.managers.push({
         username: randomManager.username,
         socketId: randomManager.socketId,
       });
       await newRoom.save();
-      console.log(
-        `Менеджер ${randomManager.username} добавлен в комнату ${newRoom.roomId}`
-      );
   
       io.emit("newChat", newRoom);
   
-      console.log(
-        `Клиент ${socket.id} присоединился к комнате ${newRoom.roomId}`
-      );
-      socket.join(newRoom.roomId); // Клиент присоединяется к комнате
+      socket.join(newRoom.roomId);
     } catch (err) {
       console.error("Ошибка при создании комнаты или присоединении клиента", err);
       socket.emit("errorCreatingRoom", "Произошла ошибка при создании комнаты.");
