@@ -182,6 +182,7 @@ io.on("connection", (socket) => {
       const room = await Room.findOne({ roomId });
       if (room) {
         // Создаем архивную комнату на основе текущей
+        console.log(room)
         const archivedRoom = new ArchivedRoom({
           roomId: room.roomId,
           clients: room.clients,

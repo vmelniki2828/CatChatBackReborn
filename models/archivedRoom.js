@@ -10,16 +10,7 @@ const messageSchema = new mongoose.Schema({
     username: String,
     clientId : String,
     email: String, 
-    location: String ,
-    // ip
-    // device
-    // phone
-    // browser
-    // userId Fundist
-    // Tag
-    // project
-    // site
-    // tickets
+    otherInfo: Object,
   });
 
 const ArchivedRoomSchema = new mongoose.Schema({
