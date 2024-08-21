@@ -13,8 +13,8 @@ const { default: mongoose } = require("mongoose");
 const ArchivedRoom = require("./models/archivedRoom");
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000", // Укажите правильный адрес вашего клиента (фронтенда)
-    methods: ["GET", "POST"],
+    origin: "http://localhost:80", // Укажите правильный адрес вашего клиента (фронтенда)
+    methods: ["GET", "POST", "PUT"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
   },
@@ -22,7 +22,7 @@ const io = socketIo(server, {
 
 app.use(
   cors({
-    origin: "http://localhost:3000", // Укажите правильный адрес вашего клиента (фронтенда)
+    origin: "http://localhost:80", // Укажите правильный адрес вашего клиента (фронтенда)
     methods: ["GET", "POST", "PUT"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
