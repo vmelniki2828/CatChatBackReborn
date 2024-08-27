@@ -96,7 +96,23 @@ io.on("connection", (socket) => {
       console.error("Ошибка при удалении менеджера из базы данных", err);
     }
   });
-
+  socket.on('rejoin_user', async ({ roomId }) => {
+    console.log(`Клиент переподключается в комнату ${roomId}`);
+    try {
+      const room = await Room.findOne({ roomId });
+  
+      if (room) {
+        socket.join(roomId);
+        socket.emit('roomRejoined');
+      } else {
+        socket.emit('error', 'Комната не найдена.');
+      }
+    } catch (err) {
+      console.error('Ошибка при переподключении к комнате:', err);
+      socket.emit('error', 'Ошибка при переподключении к комнате.');
+    }
+  });
+  
   socket.on('join_user', async ({ username, email, otherInfo }) => {
     console.log(`User ${username} with email ${email} and data:`, otherInfo);
     
